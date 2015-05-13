@@ -8,12 +8,14 @@
 #include <netdb.h>
 #include <getopt.h>
 #include <signal.h>
+#include <readline/readline.h>
+#include <readline/history.h>
 #include "smdp.h"
 
 #define DEFAULT_PORT 3535
 
 char buf[1024];
-char line[256];
+char* line;
 
 int sockfd;
 
@@ -257,18 +259,18 @@ int main(int argc, char** argv){
 
     help_message();
 
+    /* disable tab completion */
+    rl_bind_key('\t', rl_abort);
 
-    while(running){
-        printf("> ");
-
-        fgets(line, sizeof(line), stdin);
-
+    while(running && (line = readline("> ")) != NULL){
         do_command(line);
 
-        if(feof(stdin)){
-            break;
+        if(line[0]!='\0'){
+            add_history(line);
         }
     }
+
+    free(line);
 
     smdp_write_int(sockfd, SMDP_CLOSE);
 
