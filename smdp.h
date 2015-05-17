@@ -38,9 +38,13 @@
 /* no file with given id */
 #define SMDP_NOFILE 9
 
+/* send file from server to client
+   with filename */
+#define SMDP_UPLOAD 10
+
 /* sent from client
    to indicate a closed connection */
-#define SMDP_CLOSE 10
+#define SMDP_CLOSE 11
 
 void error(char* msg){
     perror(msg);

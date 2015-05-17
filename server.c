@@ -270,6 +270,35 @@ void send_file(int sock, const char* path){
     fclose(fp);
 }
 
+void receive_file(int sock, char* path){
+    FILE* fp;
+
+    fp = fopen(path, "wb");
+    
+    uint32_t len = smdp_read_int(sock);
+    if(verbose){
+        printf("received length %d\n", len);
+    }
+    uint32_t counter = 0;
+
+    /* read into the buffer and send part by part until end of file */
+    while(counter < len){
+        uint32_t to_read = (len-counter<1024)?(len-counter):1024;
+        int n = read(sock, buf, to_read);
+
+        if(n < 0){
+            error("Error reading from socket");
+        }
+
+        fwrite(buf, sizeof(char), to_read, fp);
+        
+        counter += to_read;
+    }
+
+
+    fclose(fp);
+}
+
 void do_file(int sock){
 
     int mid = smdp_read_int(sock);
@@ -357,6 +386,62 @@ void do_random(int sock){
     }
 }
 
+void do_upload(int sock){
+    if(verbose){
+        printf("Handling upload command\n");
+    }
+
+    if(!authenticated){
+        smdp_write_int(sock, SMDP_DENY);
+        return;
+    } else {
+        smdp_write_int(sock, SMDP_ACCEPT);
+    }
+
+    char name[256];
+    char filename[256];
+    char path[256];
+
+    memset(&name, 0, 256);
+    memset(&filename, 0, 256);
+    memset(&path, 0, 256);
+    smdp_read_str(sock, name, 256);
+
+    if(verbose){
+        printf("Received name %s\n", name); 
+    }
+
+    FILE* pipe = popen("< /dev/urandom tr -dc _A-Z-a-z-0-9 | head -c12", "r");
+    fread(filename, 1, 12, pipe);
+    pclose(pipe);
+
+    if(verbose){
+        printf("Random filename: %s\n", filename);
+    }
+
+    snprintf(path, 256, "uploads/%s.mp3", filename);
+
+    receive_file(sock, path);
+
+    char* sql = "INSERT INTO files(name, path) VALUES(?, ?)";
+
+    sqlite3_stmt* stmt;
+    int rc = sqlite3_prepare_v2(db, sql, -1, &stmt, 0);
+
+    sqlite3_bind_text(stmt, 1, name, strlen(name), SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 2, path, strlen(path), SQLITE_STATIC);
+
+    if(rc != SQLITE_OK){
+        dberror("Failed to prepare statement");
+    }
+
+    rc = sqlite3_step(stmt);
+
+    if(rc == SQLITE_ERROR){
+        dberror("Failed to execute statement");
+    }
+}
+
 void handle(int sock){
     int n = 0;
     int rc = 0;
@@ -440,6 +525,10 @@ void handle(int sock){
 
             case SMDP_RANDOM:
             do_random(sock);
+            break;
+
+            case SMDP_UPLOAD:
+            do_upload(sock);
             break;
 
             default:

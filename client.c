@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h>
@@ -84,6 +85,52 @@ void do_pass(char* password){
     }
 }
 
+/* reads a file from given path and sends it through the socket connection
+   by reading the file into the buffer */
+void send_file(const char* path){
+
+    if(verbose){
+        printf("Sending file %s\n", path);
+    }
+
+    uint32_t len;
+    struct stat st;
+
+    /* stat returns -1 when the given file does not exist */
+    if(stat(path, &st) < 0){
+        fprintf(stderr, "File not found: %s\n", path);
+        return;
+    }
+
+    /* send the file command and file size */
+    len = st.st_size;
+
+    smdp_write_int(sockfd, len);
+
+    /* open the file */
+    FILE* fp;
+
+    fp = fopen(path, "rb");
+    
+    uint32_t counter = 0;
+
+    /* read into the buffer and send part by part until end of file */
+    while(counter < len){
+        uint32_t to_read = (len-counter<1024)?(len-counter):1024;
+        memset(buf, 0, 1024);
+        fread(buf, sizeof(char), to_read, fp);
+
+        int n = write(sockfd, buf, to_read);
+        
+        if(n < 0){
+            error("Error writing to socket");
+        }
+
+        counter += to_read;
+    }
+
+    fclose(fp);
+}
 
 void receive_file(char* path){
     FILE* fp;
@@ -137,6 +184,29 @@ void do_random(char* path){
     } else {
         receive_file(path);
     }
+}
+
+void do_upload(char* name, char* path){
+    struct stat st;
+
+    /* stat returns -1 when the given file does not exist */
+    if(stat(path, &st) < 0){
+        fprintf(stderr, "File not found: %s\n", path);
+        return;
+    }
+
+    smdp_write_int(sockfd, SMDP_UPLOAD);
+
+    int res = smdp_read_int(sockfd);
+
+    if(res == SMDP_DENY){
+        printf("Access denied\n");
+        return;
+    }
+
+    smdp_write_str(sockfd, name);
+
+    send_file(path);
 }
 
 void signal_handler(int sig){
@@ -213,6 +283,7 @@ void help_message(){
     printf("* pass <password> \n");
     printf("* download <mid> <filename> \n");
     printf("* random <filename>\n");
+    printf("* upload <name> <path>\n");
     printf("* exit\n");
 }
 
@@ -237,7 +308,13 @@ void do_command(char* command){
     } else if(strcmp(tok, "random")==0){
         tok = strtok(NULL, " \n");
         do_random(tok);
-    } else if(strcmp(tok, "exit")==0){
+    } else if(strcmp(tok, "upload")==0){
+        tok = strtok(NULL, " \n");
+        char name[256];
+        strcpy(name, tok);
+        tok = strtok(NULL, " \n");
+        do_upload(name, tok);
+    }else if(strcmp(tok, "exit")==0){
         running = 0;
     } else {
         printf("Invalid command %s\n", tok);
