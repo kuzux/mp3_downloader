@@ -183,8 +183,7 @@ void do_pass(int sock){
 
     if(rc == SQLITE_ROW){
         /* a user with that username exists */
-        const char* realuser = sqlite3_column_text(stmt, 0);
-        const char* realpass = sqlite3_column_text(stmt, 1);
+        const char* realpass = (const char*)sqlite3_column_text(stmt, 1);
 
         /* check if password matches 
            (we really shouldn't be doing that - storing passwords in plaintext in db)
@@ -331,7 +330,7 @@ void do_file(int sock){
 
     if(rc == SQLITE_ROW){
         /* found the file, send it */
-        const char* path = sqlite3_column_text(stmt, 0);
+        const char* path = (const char*)sqlite3_column_text(stmt, 0);
         send_file(sock, path);
     } else {
 
@@ -373,7 +372,7 @@ void do_random(int sock){
     if(rc == SQLITE_ROW){
         /* found one, send its id and then send the file */
         int mid = sqlite3_column_int(stmt, 0);
-        const char* path = sqlite3_column_text(stmt, 1);
+        const char* path = (const char*)sqlite3_column_text(stmt, 1);
 
         printf("%d %s\n", mid, path);
 
@@ -443,9 +442,6 @@ void do_upload(int sock){
 }
 
 void handle(int sock){
-    int n = 0;
-    int rc = 0;
-
     open_db();
 
     /* we'll be using select system call for implementing timeout

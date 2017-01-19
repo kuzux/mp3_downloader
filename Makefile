@@ -1,11 +1,17 @@
+CFLAGS?=-O2 -g -Wall -Werror
+OBJS:=main.o
+LIBS:=-ledit -lsqlite3
+BINS:=client server
+
 all: server client
 
+.PHONY: all clean
+
 server: server.c
-	gcc server.c -o server -lsqlite3 
+	gcc $< -o $@ $(CFLAGS) $(LIBS)
 
 client: client.c
-	gcc client.c -o client -lreadline
+	gcc $< -o $@ $(CFLAGS) $(LIBS)
 
 clean:
-	rm client
-	rm server
+	rm *.o $(BINS)

@@ -9,8 +9,7 @@
 #include <netdb.h>
 #include <getopt.h>
 #include <signal.h>
-#include <readline/readline.h>
-#include <readline/history.h>
+#include <histedit.h>
 #include "smdp.h"
 
 #define DEFAULT_PORT 3535
@@ -321,6 +320,9 @@ void do_command(char* command){
     }
 }
 
+char* prompt(EditLine* e) {
+    return "> ";
+}
 
 int main(int argc, char** argv){
     parse_opts(argc, argv);
@@ -337,17 +339,34 @@ int main(int argc, char** argv){
     help_message();
 
     /* disable tab completion */
-    rl_bind_key('\t', rl_abort);
+    /* rl_bind_key('\t', rl_abort); */
 
-    while(running && (line = readline("> ")) != NULL){
+    EditLine* el;
+    History* hist;
+    HistEvent ev;
+
+    int linelen;
+
+    el = el_init(argv[0], stdin, stdout, stderr);
+    el_set(el, EL_PROMPT, &prompt);
+    el_set(el, EL_EDITOR, "emacs");
+
+    hist = history_init();
+    history(hist, &ev, H_SETSIZE, 800);
+
+    el_set(el, EL_HIST, history, hist);
+
+    while(running && (line = (char*)el_gets(el, &linelen)) != NULL){
         do_command(line);
 
-        if(line[0]!='\0'){
-            add_history(line);
+        if(linelen!=0){
+            history(hist, &ev, H_ENTER, line);
         }
     }
 
     free(line);
+    history_end(hist);
+    el_end(el);
 
     smdp_write_int(sockfd, SMDP_CLOSE);
 
